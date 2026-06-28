@@ -1,0 +1,30 @@
+# Render blueprint for Arbiter — the AP-autopilot demo.
+# Render auto-detects this file when the repo is connected, so the service builds
+# with no dashboard click-ops. Free tier; spins down when idle and back up on the
+# next request (fine for a judged demo — the first hit wakes it).
+#
+# Sponsor keys are NOT set here. Add them in the Render dashboard as environment
+# variables (Settings -> Environment) so no secret ever lives in the repo:
+#   STRIPE_SECRET_KEY   sk_test_...      (activates the real test-mode Stripe rail)
+#   NVIDIA_API_KEY      nvapi-...        (optional; activates real Nemotron)
+#   OPENROUTER_API_KEY  sk-or-v1-...     (optional Nemotron fallback if NVIDIA 403s)
+# With none set, every rail falls back to its faithful mock and the demo still runs.
+
+services:
+  - type: web
+    name: arbiter
+    runtime: python
+    plan: free
+    # Install the app plus the extras the web demo actually needs: the server
+    # (web), the real Stripe rail (stripe), and the OpenAI-compatible client the
+    # Nemotron layer uses (llm). Core stays dependency-free; these are the only
+    # extras a deployed demo exercises.
+    buildCommand: "pip install --upgrade pip && pip install -e '.[web,stripe,llm]'"
+    # Render injects $PORT. uvicorn binds it on all interfaces so the proxy can
+    # reach it. The dashboard makes same-origin calls, so HTTPS just works.
+    startCommand: "uvicorn arbiter.web.server:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /state
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
