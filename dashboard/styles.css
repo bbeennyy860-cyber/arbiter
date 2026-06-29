@@ -489,6 +489,11 @@ a { color: inherit; text-decoration: none; }
 /* ---------- Per-job ledger ---------- */
 .jobs { display: flex; flex-direction: column; }
 .job-row { display: grid; grid-template-columns: 1.5fr 0.8fr 0.8fr 0.9fr 1.1fr; align-items: center; gap: 14px; padding: 14px 18px; }
+.jobs-rollup { display: flex; gap: 28px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.jr-fig { display: flex; flex-direction: column; }
+.jr-fig b { font-size: 22px; color: var(--approve); }
+.jr-fig small { color: var(--muted); font-size: 12px; }
+.jr-saved b { color: var(--escalate); }
 .job-row + .job-row { border-top: 1px solid var(--line); }
 .job-row.is-hero { box-shadow: inset 3px 0 0 var(--escalate); }
 .job-row.has-policy-block { box-shadow: inset 3px 0 0 var(--block); }

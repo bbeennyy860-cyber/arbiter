@@ -766,7 +766,15 @@ function renderJobs(timeline) {
     el.jobs.innerHTML = `<div class="jobs-empty">No jobs yet — waiting for the first client payment.</div>`;
     return;
   }
-  el.jobs.innerHTML = jobs
+  const kept = jobs.reduce((s, j) => s + j.margin, 0);
+  const saved = jobs.reduce((s, j) => s + j.refusedMargin, 0);
+  const billed = jobs.filter((j) => j.revenue > 0).length;
+  const rollup = `
+    <div class="jobs-rollup">
+      <span class="jr-fig"><b>${money(kept)}</b><small>margin kept across ${billed} job${billed === 1 ? "" : "s"}</small></span>
+      <span class="jr-fig jr-saved"><b>${money(saved)}</b><small>refused to protect margin</small></span>
+    </div>`;
+  el.jobs.innerHTML = rollup + jobs
     .map((j) => {
       const marginPct = j.revenue > 0 ? Math.max(0, Math.min(1, j.margin / j.revenue)) : 0;
       const neg = j.margin < 0;
