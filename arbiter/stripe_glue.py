@@ -263,6 +263,35 @@ class LiveStripeGlue(StripeGlue):
         self.calls.append(c)
         return c
 
+    def provision_capability(self, category: str, amount: float, currency: str = "GBP") -> StripeCall:
+        """Create a real test-mode charge for an approved delivery self-spend.
+
+        The agent buying a capability to deliver a job (stock footage, render
+        credits, hosting) is a real outbound spend, so it should leave a real
+        receipt on the rail — not a silent stub. Uses the canonical test card
+        token so the charge lands as a genuine ``ch_..`` object retrievable from
+        the test dashboard. A rail error is recorded rather than raised so a
+        hiccup never crashes governance, matching the other live primitives.
+        """
+        cur = (currency or self.currency).lower()
+        try:
+            charge = self._stripe.Charge.create(
+                amount=int(round(amount * 100)),
+                currency=cur,
+                source="tok_visa",
+                description=f"Arbiter: delivery spend ({category})",
+                metadata={"arbiter_category": category},
+            )
+            c = StripeCall(op="provision_capability", category=category, amount=amount, currency=cur,
+                           notes=f"live test-mode charge ({getattr(charge, 'status', 'created')})",
+                           stripe_id=getattr(charge, "id", None))
+        except Exception as e:  # noqa: BLE001 — never let a rail error crash governance
+            c = StripeCall(op="provision_capability", category=category, amount=amount, currency=cur,
+                           notes=f"live call failed, recorded only: {type(e).__name__}: {e}",
+                           failed=True)
+        self.calls.append(c)
+        return c
+
     def pay_supplier(self, payee: str, amount: float, currency: str = "GBP",
                      ref: Optional[str] = None) -> StripeCall:
         """Create a real test-mode Connect transfer to an approved supplier.
