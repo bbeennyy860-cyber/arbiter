@@ -174,6 +174,36 @@ def test_live_glue_refuses_non_test_key():
         LiveStripeGlue("sk_" + "live_" + "rejectme")
 
 
+def test_constructor_strips_whitespace_from_key():
+    """A key with a trailing newline (as host env vars carry) must be stripped.
+
+    Regression lock: an unstripped key lands in the Authorization header and
+    urllib3 rejects the return character with InvalidHeader, which the Stripe SDK
+    surfaces as a misleading APIConnectionError. The constructor must strip so a
+    padded env var still produces a working client. We assert the prefix check
+    passes despite surrounding whitespace and the api_key stored on the SDK is
+    clean.
+    """
+    padded = "  sk_" + "test_" + "dummy0000\n"
+    glue = LiveStripeGlue(padded)  # must NOT raise despite leading/trailing ws
+    assert glue._stripe.api_key == "sk_" + "test_" + "dummy0000"
+    assert "\n" not in glue._stripe.api_key
+
+
+def test_provision_capability_creates_real_charge(live):
+    """Approved self-spend must hit the rail as a real Charge, not the stub.
+
+    Locks the fix for LiveStripeGlue missing a provision_capability override:
+    without it, an approved delivery self-spend silently fell through to the
+    stub and produced no stripe_id while the earn side produced real pi_ ids.
+    """
+    glue, fake = live
+    call = glue.provision_capability("compute", 35.0, "GBP")
+    assert call.op == "provision_capability"
+    assert call.stripe_id is not None  # a real charge id, not a silent stub
+    assert call.failed is False
+
+
 def test_stub_pay_supplier_moves_nothing_and_records():
     """The stub records a pay_supplier with no stripe_id (no money moved)."""
     stub = StripeGlue()

@@ -147,6 +147,11 @@ class LiveStripeGlue(StripeGlue):
 
     def __init__(self, secret_key: str) -> None:
         super().__init__()
+        # Defensive strip: a key from a host env var may carry a trailing newline,
+        # which urllib3 rejects in the Authorization header (InvalidHeader, surfaced
+        # as a misleading APIConnectionError). select_stripe strips too; this keeps
+        # the class correct for any direct caller.
+        secret_key = secret_key.strip()
         if not secret_key.startswith("sk_test_"):
             raise ValueError("LiveStripeGlue refuses a non-test key — test-mode only (sk_test_...).")
         import stripe  # imported lazily so the stub path needs no dependency
@@ -330,7 +335,12 @@ def select_stripe() -> StripeGlue:
     Prints which backend is active so the demo shows at boot whether the Stripe
     rail is real or recorded — same honesty discipline as the Nemotron banner.
     """
-    key = os.environ.get("STRIPE_SECRET_KEY", "")
+    # Strip whitespace/newlines: a key pasted into a host env var (Render, Heroku,
+    # etc.) often carries a trailing newline. The Stripe SDK puts the raw key in
+    # the Authorization header, and urllib3 rejects a header value containing a
+    # return character with "InvalidHeader" — surfaced as a misleading
+    # APIConnectionError. Stripping here makes any padded env var work.
+    key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
     if key.startswith("sk_test_"):
         try:
             glue = LiveStripeGlue(key)
