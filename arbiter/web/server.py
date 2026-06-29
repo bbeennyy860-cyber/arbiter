@@ -266,7 +266,8 @@ class DemoState:
             "stripe_backend": getattr(self.stripe, "backend", "stub"),
             "supplier_payments": [
                 {"payee": c.payee, "amount": c.amount, "currency": c.currency,
-                 "stripe_id": c.stripe_id, "ref": c.ref, "failed": getattr(c, "failed", False)}
+                 "stripe_id": c.stripe_id, "ref": c.ref, "failed": getattr(c, "failed", False),
+                 "notes": getattr(c, "notes", "")}
                 for c in self.stripe.calls if c.op == "pay_supplier"
             ],
             # Inbound money-in objects (real test-mode pi_... when live) so the
@@ -274,7 +275,8 @@ class DemoState:
             # payout side. Mirrors supplier_payments for the 'client paid' beat.
             "customer_payments": [
                 {"ref": c.ref, "amount": c.amount, "currency": c.currency,
-                 "stripe_id": c.stripe_id, "failed": getattr(c, "failed", False)}
+                 "stripe_id": c.stripe_id, "failed": getattr(c, "failed", False),
+                 "notes": getattr(c, "notes", "")}
                 for c in self.stripe.calls if c.op == "create_payment"
             ],
             # F5-lite: prove the rail matches the ledger's approved spend, to the
