@@ -281,10 +281,13 @@ const STRIPE_OBJ_BASE = {
   pi: "https://dashboard.stripe.com/test/payments/",
   tr: "https://dashboard.stripe.com/test/connect/transfers/",
   cs: "https://dashboard.stripe.com/test/checkout/sessions/",
+  ch: "https://dashboard.stripe.com/test/payments/",
 };
 
 function isRealStripeId(id) {
-  return typeof id === "string" && /^(pi|tr|cs)_/.test(id);
+  // A real test-mode rail object: PaymentIntent (pi_), Connect transfer (tr_),
+  // Checkout session (cs_), or Charge (ch_) — the self-spend delivery charge.
+  return typeof id === "string" && /^(pi|tr|cs|ch)_/.test(id);
 }
 
 function stripeLink(id) {
