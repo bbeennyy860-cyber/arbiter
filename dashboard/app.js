@@ -237,13 +237,14 @@ function railStatusForRow(state, row) {
         recorded: !isRealStripeId(payment.stripe_id),
         label: payment.failed ? "Rail failed" : isRealStripeId(payment.stripe_id) ? "Stripe receipt" : "Recorded payment",
         notes: payment.notes || "",
+        receipt_url: payment.receipt_url || null,
       };
     }
 
     const jobs = state && state.business && state.business.jobs ? state.business.jobs : [];
     const job = jobs.find((j) => j.title === row.job);
     const id = job && job.payment_id;
-    return isRealStripeId(id) ? { id, failed: false, recorded: false, label: "Stripe receipt", notes: "" } : null;
+    return isRealStripeId(id) ? { id, failed: false, recorded: false, label: "Stripe receipt", notes: "", receipt_url: null } : null;
   }
   const settlements = (state && state.settlements) || [];
   const settlement = settlements.find((s) => s.event_id === row.id);
@@ -254,6 +255,7 @@ function railStatusForRow(state, row) {
       recorded: !isRealStripeId(settlement.stripe_id),
       label: settlement.failed ? "Rail failed" : isRealStripeId(settlement.stripe_id) ? "Stripe receipt" : "Recorded settlement",
       notes: settlement.notes || "",
+      receipt_url: settlement.receipt_url || null,
     };
   }
 
@@ -266,6 +268,7 @@ function railStatusForRow(state, row) {
       recorded: !isRealStripeId(supplierPayment.stripe_id),
       label: supplierPayment.failed ? "Rail failed" : isRealStripeId(supplierPayment.stripe_id) ? "Stripe receipt" : "Recorded settlement",
       notes: supplierPayment.notes || "",
+      receipt_url: supplierPayment.receipt_url || null,
     };
   }
   return null;
@@ -296,12 +299,29 @@ function stripeLink(id) {
   return base ? base + id : null;
 }
 
+// The link a judge should actually click. Prefer Stripe's public hosted receipt
+// (pay.stripe.com/receipts/...) which opens with no login and verifies the real
+// payment; fall back to the dashboard deep-link (login-walled) only when the rail
+// gave us no receipt url.
+function receiptHref(rail) {
+  if (rail && typeof rail.receipt_url === "string" && /^https:\/\//.test(rail.receipt_url)) {
+    return rail.receipt_url;
+  }
+  return stripeLink(rail && rail.id);
+}
+
 function railChipHtml(rail) {
   if (!rail) return "";
   if (rail.failed) {
     return `<span class="rail-chip rail-failed" title="${escapeHtml(rail.notes || "Rail call failed")}">RAIL FAILED</span>`;
   }
   if (isRealStripeId(rail.id)) {
+    const href = receiptHref(rail);
+    // Make the chip itself open the public receipt so a judge can click straight
+    // from the feed into Stripe's own confirmation page — the end-to-end proof.
+    if (href) {
+      return `<a class="stripe-chip" href="${href}" target="_blank" rel="noopener" title="Open the real Stripe receipt (no login needed)">${escapeHtml(rail.id)} \u2197</a>`;
+    }
     return `<span class="stripe-chip" title="Real Stripe test-mode id">${escapeHtml(rail.id)}</span>`;
   }
   return `<span class="rail-chip rail-recorded" title="Recorded by the rail adapter; no real Stripe id">${escapeHtml(rail.label || "Recorded")}</span>`;
@@ -310,7 +330,7 @@ function railChipHtml(rail) {
 function railDetailRowHtml(rail) {
   if (!rail) return "";
   const stripeId = isRealStripeId(rail.id) ? rail.id : null;
-  const stripeHref = stripeLink(stripeId);
+  const stripeHref = receiptHref(rail);
   if (rail.failed) {
     return `<div class="kv-row"><span class="k">Rail status</span><span class="v rail-status-failed">Rail failed${rail.notes ? ` · ${escapeHtml(rail.notes)}` : ""}</span></div>`;
   }

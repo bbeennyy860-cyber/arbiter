@@ -276,7 +276,8 @@ class DemoState:
             "customer_payments": [
                 {"ref": c.ref, "amount": c.amount, "currency": c.currency,
                  "stripe_id": c.stripe_id, "failed": getattr(c, "failed", False),
-                 "notes": getattr(c, "notes", "")}
+                 "notes": getattr(c, "notes", ""),
+                 "receipt_url": getattr(c, "receipt_url", None)}
                 for c in self.stripe.calls if c.op == "create_payment"
             ],
             # F5-lite: prove the rail matches the ledger's approved spend, to the
@@ -297,6 +298,7 @@ class DemoState:
                     "stripe_object": ("transfer" if c.op == "pay_supplier" else "capability"),
                     "backend": getattr(self.stripe, "backend", "stub"),
                     "failed": getattr(c, "failed", False),
+                    "receipt_url": getattr(c, "receipt_url", None),
                 }
                 for c in self.stripe.calls
                 if c.op in ("pay_supplier", "provision_capability") and c.event_id

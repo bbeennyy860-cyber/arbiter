@@ -51,6 +51,12 @@ class StripeCall:
     # its Stripe receipt by id. Optional: ops not driven through settle() (the
     # inbound checkout/webhook pair) leave it None.
     event_id: Optional[str] = None
+    # Stripe's public hosted-receipt URL (pay.stripe.com/receipts/...) when a live
+    # call produced one. Unlike the dashboard deep-link, this page needs no login —
+    # anyone can open it and verify the payment, so the UI links chips here. Charges
+    # expose it directly; PaymentIntents carry it on their latest_charge. None on
+    # the stub and when the rail didn't return one.
+    receipt_url: Optional[str] = None
 
 
 class StripeBackend(Protocol):
@@ -204,9 +210,16 @@ class LiveStripeGlue(StripeGlue):
                 automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
                 description=f"Arbiter: client pays invoice {ref}",
                 metadata={"invoice_ref": ref or ""},
+                expand=["latest_charge"],
             )
+            # The public receipt lives on the PaymentIntent's charge, not the PI
+            # itself. With latest_charge expanded it's a Charge object; guard for
+            # the id-only shape too so a Stripe API change can't crash governance.
+            lc = getattr(pi, "latest_charge", None)
+            receipt_url = getattr(lc, "receipt_url", None) if lc is not None and not isinstance(lc, str) else None
             c = StripeCall(op="create_payment", ref=ref, amount=amount, currency=currency,
-                           notes=f"live test-mode PaymentIntent ({pi.status})", stripe_id=pi.id)
+                           notes=f"live test-mode PaymentIntent ({pi.status})", stripe_id=pi.id,
+                           receipt_url=receipt_url)
         except Exception as e:  # noqa: BLE001 — never let a rail error crash governance
             c = StripeCall(op="create_payment", ref=ref, amount=amount, currency=currency,
                            notes=f"live call failed, recorded only: {type(e).__name__}: {e}",
@@ -289,7 +302,8 @@ class LiveStripeGlue(StripeGlue):
             )
             c = StripeCall(op="provision_capability", category=category, amount=amount, currency=cur,
                            notes=f"live test-mode charge ({getattr(charge, 'status', 'created')})",
-                           stripe_id=getattr(charge, "id", None))
+                           stripe_id=getattr(charge, "id", None),
+                           receipt_url=getattr(charge, "receipt_url", None))
         except Exception as e:  # noqa: BLE001 — never let a rail error crash governance
             c = StripeCall(op="provision_capability", category=category, amount=amount, currency=cur,
                            notes=f"live call failed, recorded only: {type(e).__name__}: {e}",
