@@ -338,6 +338,7 @@ def diag_egress() -> JSONResponse:
     import socket
     import ssl
     import time as _t
+    import os
     import urllib.error
     import urllib.request
 
@@ -391,6 +392,40 @@ def diag_egress() -> JSONResponse:
         out["steps"]["https"] = {"ok": False, "ms": round((_t.time() - s) * 1000), "error": f"{type(e).__name__}: {e}"}
 
     out["verdict"] = "egress_ok" if out["steps"].get("https", {}).get("ok") else "egress_blocked"
+
+    # 5. The Stripe SDK itself — it uses its own HTTP client (requests/urllib3),
+    # not stdlib urllib, so it can fail where step 4 succeeds. This is the call
+    # that actually backs create_payment. Reads the key only to make the call;
+    # never returns or logs it.
+    sdk: dict[str, Any] = {}
+    try:
+        import stripe as _stripe
+        sdk["version"] = getattr(_stripe, "VERSION", "?")
+        key = os.environ.get("STRIPE_SECRET_KEY", "")
+        sdk["key_present"] = bool(key)
+        sdk["key_is_test"] = key.startswith("sk_test_")
+        # what HTTP client + CA bundle is the SDK bound to?
+        try:
+            import certifi  # noqa
+            sdk["certifi"] = certifi.where()
+        except Exception as ce:  # noqa: BLE001
+            sdk["certifi"] = f"absent: {type(ce).__name__}"
+        sdk["ssl_default_paths"] = ssl.get_default_verify_paths().cafile
+        client_name = type(getattr(_stripe, "default_http_client", None)).__name__
+        sdk["http_client"] = client_name
+        if key.startswith("sk_test_"):
+            _stripe.api_key = key
+            s = _t0()
+            try:
+                bal = _stripe.Balance.retrieve()
+                sdk["call"] = {"ok": True, "obj": "balance", "livemode": getattr(bal, "livemode", None),
+                               "ms": round((_t.time() - s) * 1000)}
+            except Exception as se:  # noqa: BLE001
+                sdk["call"] = {"ok": False, "ms": round((_t.time() - s) * 1000),
+                               "error": f"{type(se).__name__}: {str(se)[:200]}"}
+    except Exception as e:  # noqa: BLE001
+        sdk["error"] = f"{type(e).__name__}: {e}"
+    out["stripe_sdk"] = sdk
     return JSONResponse(out)
 
 
