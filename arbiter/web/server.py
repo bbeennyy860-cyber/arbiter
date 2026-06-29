@@ -326,6 +326,74 @@ def get_state() -> JSONResponse:
     return JSONResponse(state.snapshot())
 
 
+@app.get("/diag/egress")
+def diag_egress() -> JSONResponse:
+    """Probe outbound connectivity to Stripe layer-by-layer from inside the host.
+
+    TEMPORARY diagnostic: isolates why a live Stripe call returns APIConnectionError
+    on this deployment by testing DNS, raw TCP, TLS, and an HTTPS round-trip
+    independently. Never reads, returns, or logs the secret key — it only reports
+    which network layer fails. Remove once egress is diagnosed.
+    """
+    import socket
+    import ssl
+    import time as _t
+    import urllib.error
+    import urllib.request
+
+    host = "api.stripe.com"
+    out: dict[str, Any] = {"host": host, "steps": {}}
+
+    def _t0():
+        return _t.time()
+
+    # 1. DNS — does the name resolve, and to what (v4/v6)?
+    try:
+        infos = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
+        fams = sorted({"IPv6" if i[0] == socket.AF_INET6 else "IPv4" for i in infos})
+        addrs = sorted({i[4][0] for i in infos})
+        out["steps"]["dns"] = {"ok": True, "families": fams, "addrs": addrs[:6]}
+    except Exception as e:  # noqa: BLE001
+        out["steps"]["dns"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        return JSONResponse(out)
+
+    # 2. Raw TCP connect to :443 (egress / firewall test, no TLS yet)
+    s = _t0()
+    try:
+        with socket.create_connection((host, 443), timeout=8) as sock:
+            out["steps"]["tcp"] = {"ok": True, "peer": sock.getpeername()[0], "ms": round((_t.time() - s) * 1000)}
+    except Exception as e:  # noqa: BLE001
+        out["steps"]["tcp"] = {"ok": False, "ms": round((_t.time() - s) * 1000), "error": f"{type(e).__name__}: {e}"}
+        return JSONResponse(out)
+
+    # 3. TLS handshake (cert/CA-store test)
+    s = _t0()
+    try:
+        ctx = ssl.create_default_context()
+        with socket.create_connection((host, 443), timeout=8) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as ss:
+                out["steps"]["tls"] = {"ok": True, "version": ss.version(), "ms": round((_t.time() - s) * 1000)}
+    except Exception as e:  # noqa: BLE001
+        out["steps"]["tls"] = {"ok": False, "ms": round((_t.time() - s) * 1000), "error": f"{type(e).__name__}: {e}"}
+        return JSONResponse(out)
+
+    # 4. HTTPS round-trip — unauthenticated GET; 401 == reachable+responding
+    s = _t0()
+    try:
+        req = urllib.request.Request(f"https://{host}/v1/charges", method="GET")
+        try:
+            resp = urllib.request.urlopen(req, timeout=10)
+            code = resp.status
+        except urllib.error.HTTPError as he:
+            code = he.code  # 401 expected without auth — proves the API answered
+        out["steps"]["https"] = {"ok": True, "http_status": code, "ms": round((_t.time() - s) * 1000)}
+    except Exception as e:  # noqa: BLE001
+        out["steps"]["https"] = {"ok": False, "ms": round((_t.time() - s) * 1000), "error": f"{type(e).__name__}: {e}"}
+
+    out["verdict"] = "egress_ok" if out["steps"].get("https", {}).get("ok") else "egress_blocked"
+    return JSONResponse(out)
+
+
 @app.post("/run")
 def run() -> dict:
     state.start()
