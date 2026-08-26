@@ -1,8 +1,9 @@
 # Arbiter dashboard
 
-The screen the judges watch the business run on. Arbiter starts from a £50 seed and runs
-a real service back office: it takes client payments through Stripe, buys what each job
-needs to deliver, and refuses any spend that would kill the job's margin.
+The screen the judges watch the simulated business run on. Arbiter starts from a £50
+seed and exercises a service-back-office scenario: it records simulated client payments,
+routes test-mode settlement through the governed backend, and refuses any spend that
+would kill the job's margin.
 
 It renders the core's `/state` contract: the seed → goal → balance header, a balance-over-time
 sparkline, revenue / cost / margin meters, a live event feed (client paid → verified → bought
@@ -39,7 +40,7 @@ dashboard at http://localhost:5173/dashboard.html and click **Run demo**.
   # from the repo root
   python -m venv .venv && .venv\Scripts\Activate.ps1
   pip install -e ".[web]"
-  python -m uvicorn arbiter.web:app --host 127.0.0.1 --port 8000
+  python -m uvicorn arbiter.web.server:app --host 127.0.0.1 --port 8000
   ```
 
   Then open http://127.0.0.1:8000 (the backend serves the dashboard itself) and
@@ -47,8 +48,9 @@ dashboard at http://localhost:5173/dashboard.html and click **Run demo**.
 
 ## The contract
 
-Defined in `../04_integration_contract.md`. The dashboard only reads `/state` and
-posts to the approve/deny URLs — it never reimplements any decision logic.
+Defined by the FastAPI routes in `../arbiter/web/server.py`. The dashboard only
+reads `/state` and posts to the approve/deny URLs — it never reimplements any
+decision logic.
 
 ## Files
 
