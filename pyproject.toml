@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,12 +8,12 @@ version = "0.1.0"
 description = "Self-governing AI accountant / payment-ops agent. The Stripe accountant that does not trust itself with your money."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "Ben + Alex" }]
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pytest-cov>=4"]
+dev = ["build>=1.2", "pytest>=7", "pytest-cov>=4"]
 # v2 money-management OutboundPayments (pay_supplier) needs a recent SDK.
 stripe = ["stripe>=11"]
 # The bounded reasoning layer talks to NVIDIA NIM over the OpenAI-compatible API.
